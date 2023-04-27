@@ -1,0 +1,345 @@
+---
+title: "FinalProject"
+author: "Cathy Kim"
+date: "2022-11-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(vdemdata)
+library(ggplot2)
+library(plotly)
+library(states)
+library(data.table)
+library(reshape2)
+library(patchwork)
+library(raster)
+library(maps)
+library(sf)
+library(conflicted)
+library(reshape2)
+library(readxl)
+```
+
+
+```{r}
+infantmortality <- read_csv('income_and_infantmortality.csv')
+#view(infantmortality)
+```
+
+```{r}
+demographics <- read_csv('data/demographics.csv')
+github_link <- read_sf("https://raw.githubusercontent.com/thisisdaryn/data/master/geo/chicago/Comm_Areas.geojson")
+income <- read_csv('data/Median_income.csv')
+hc_satisfaction <- read_csv('data/hc_satisfaction_rate.csv')
+life_expectancy <- read_csv('data/life_expectancy.csv')
+#view(demographics)
+#view(github_link)
+```
+
+```{r}
+# merge the two data sets
+github_link$community <- tolower(github_link$community)
+demographics$Name <- tolower(demographics$Name)
+merged <- inner_join(github_link, demographics, by = c("community" = "Name"))
+```
+
+```{r}
+names(merged)[names(merged) == 'Non-Hispanic Black'] <- 'non_hispanic_black'
+```
+
+
+```{r}
+# Making the map for demographic percentages
+dem_map <- ggplot(merged, mapping = aes(Longitude, Latitude, fill = Population)) +
+  geom_sf() +
+  theme_minimal() +
+  scale_fill_distiller(direction = 1) +
+  ggtitle("Chicago's Neighborhoods")
+```
+
+```{r}
+# Making the map for Non-Hispanic Black Population
+nhb_map <- ggplot(merged, mapping = aes(Longitude, Latitude, fill = non_hispanic_black)) +
+  geom_sf() +
+  theme_minimal() +
+  scale_fill_distiller(palette = "Greens", name = "Non-Hispanic Black Percentage", direction = 1) +
+  ggtitle("Non-Hispanic Black Population in Chicago's Neighborhoods")
+```
+
+```{r}
+income$Name <- tolower((income$Name))
+merged_2 <- inner_join(merged, income, by = c("community" = "Name"))
+```
+
+```{r}
+options(scipen = 100)
+
+income_map <- ggplot(merged_2, mapping = aes(Longitude.x, Latitude.y, fill = Income)) +
+  geom_sf() +
+  theme_minimal() +
+  scale_fill_distiller(palette = "Greens", name = "Median Household Income ($)", direction = 1, breaks = c(25000, 75000, 125000)) +
+  ggtitle("Median Household Income in Chicago's Neighborhoods") +
+  labs(x = "Longitude", y = "Latitude")
+
+combined_map = nhb_map + income_map
+```
+
+```{r}
+# Show correlation between income and health care satisfaction rate
+# First, merge the two datasets
+hc_satisfaction$Name <- tolower(hc_satisfaction$Name)
+hc_income_merged <- inner_join(income, hc_satisfaction, by = "Name")
+
+ggplot(data = hc_income_merged, aes(x = Income, y = HC_SF_RATE)) +
+  geom_point() +
+  theme_minimal()
+```
+```{r}
+merged3 <- inner_join(github_link, hc_income_merged, by = c("community" = "Name"))
+
+ggplot(merged3, mapping = aes(Longitude.x, Latitude.y, fill = HC_SF_RATE)) +
+  geom_sf() +
+  scale_fill_distiller(palette = "Purples", name = "Healthcare Satisfaction Rate (%)", direction = 1) +
+  theme_minimal() +
+  ggtitle("Healthcare Satisfaction Rate in Chicago's Neighborhoods") +
+  labs(x = "Longitude", y = "Latitude")
+```
+
+```{r}
+life_expectancy$Name <- tolower(life_expectancy$Name)
+le_merged <- inner_join(github_link, life_expectancy, by = c("community" = "Name"))
+```
+
+```{r}
+le_map <- ggplot(le_merged, mapping = aes(Longitude, Latitude, fill = life_expectancy)) +
+  geom_sf() +
+  scale_fill_distiller(palette = "Oranges", name = "Life Expectancy", direction = 1) +
+  theme_minimal() +
+  ggtitle("Life Expectancy in Chicago's Neighborhoods") +
+  labs(x = "Longitude", y = "Latitude")
+```
+
+```{r}
+income_map <- ggplot(merged_2, mapping = aes(Longitude.x, Latitude.y, fill = Income)) +
+  geom_sf() +
+  theme_minimal() +
+  scale_fill_distiller(palette = "Oranges", name = "Median Household Income ($)", direction = 1, breaks = c(25000, 75000, 125000)) +
+  ggtitle("Median Household Income in Chicago's Neighborhoods") +
+  labs(x = "Longitude", y = "Latitude")
+```
+
+```{r}
+le_income_map <- le_map + income_map
+```
+
+
+```{r}
+le_income_corr <- inner_join(income, life_expectancy, by = "Name")
+
+ggplot(data = le_income_corr, aes(x = Income, y = life_expectancy)) +
+  geom_point() +
+  geom_smooth(method=lm, se=FALSE)
+  theme_minimal()
+```
+
+```{r}
+svi_index <- read_csv('data/social_vulnerability.csv')
+```
+
+```{r}
+svi_index$Name <- tolower(svi_index$Name)
+svi_merged <- inner_join(svi_index, le_income_corr, by = "Name")
+```
+
+```{r}
+income_le <- ggplot(data = svi_merged, aes(x = Income, y = life_expectancy, color = Percentile)) +
+  geom_point(size = 3) +
+  guides(color = guide_legend(title = "Social Vulnerability Index (%)")) +
+  ggtitle("Scatterplot of Income versus Life Expectancy in Chicago") +
+  labs(x = "Income ($)", y = "Life Expectancy") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 15, face = "bold"),
+        axis.title = element_text(face = "bold", size = 13),
+        legend.title = element_text(size = 12))
+```
+
+```{r}
+
+merged_3 <- inner_join(demographics, income, by = "Name")
+names(merged_3)[names(merged_3) == 'Non-Hispanic Black'] <- 'non_hispanic_black'
+
+nhb_scatter <- ggplot(data = merged_3, aes(x = Income, y = non_hispanic_black)) +
+  geom_point(color = "dark green", size = 2.5) +
+  ggtitle('Scatterplot of Non-hispanic Black population and Income') +
+  labs(x = "Income ($)", y = "Non-hispanic Black population (%)") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 15, face = "bold"),
+        axis.title = element_text(face = "bold", size = 13))
+```
+
+
+```{r}
+le_drop <- read_excel('data/life_expectancy_drop.xlsx')
+view(le_drop)
+```
+
+```{r}
+# Bar chart of life expectancy drop from 2019 to 2020
+
+le_drop.df <- as.data.frame(le_drop)
+
+le_drop.df$Race <- factor(le_drop.df$Race, levels = c("Overall", "White", "Black", "Hispanic", "Asian/Pacific Islander"))
+
+bar_chart <- ggplot(le_drop.df, aes(x = Race, y = Frequency, fill = as.factor(Year))) +
+  geom_bar(stat = "identity", position = 'dodge') +
+  geom_text(aes(label=Frequency), position = position_dodge(width = 0.9), vjust = 0.25, size = 5) +
+  scale_fill_manual(values = c("#798DE9", "#EB8C93")) +
+  ylim(0,100) +
+  labs(x = "", y = "Life Expectancy") +
+  ggtitle("Life Expectancy Drop in Chicago from 2019 to 2020") +
+  guides(fill = guide_legend(title = "Year")) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size = 20),
+        axis.text.x = element_text(face = "bold", size = 10))
+```
+
+```{r}
+chronic_cor <- read_excel('data/cd_cor.xlsx')
+```
+
+```{r}
+chronic_cor_numeric <- dplyr::select(chronic_cor, 7:17)
+```
+
+```{r}
+chronic_cormat <- round(cor(chronic_cor_numeric), 2)
+head(chronic_cormat)
+```
+
+```{r}
+# Heatmap with ggplot2
+melted_chronic_cormat <- reshape2::melt(chronic_cormat)
+head(melted_chronic_cormat)
+```
+
+```{r}
+cor_mat_map <- ggplot(data = melted_chronic_cormat, aes(x = Var1, y = Var2, fill = value)) + 
+  geom_tile() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1))
+```
+
+
+```{r}
+lower_tri_func <- function(chronic_cormat) {
+  chronic_cormat[upper.tri(chronic_cormat)] <- NA
+  return(chronic_cormat)
+}
+
+upper_tri <- function(chronic_cormat) {
+  chronic_cormat[lower.tri(chronic_cormat)] <- NA
+  return(chronic_cormat)
+}
+```
+
+```{r}
+upper_tri_cor <- upper_tri(chronic_cormat)
+upper_tri_cor
+```
+
+```{r}
+melted_2 <- reshape2::melt(upper_tri_cor, na.rm = TRUE)
+```
+
+
+
+```{r}
+heat_map <- ggplot(data = melted_2, aes(x = Var2, y = Var1, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white",
+                      midpoint = 0, limit = c(-1, 1), space = "Lab", name = "Correlation") +
+  ggtitle("Correlation between Chronic Diseases and Life Expectancy in Chicago") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1),
+        plot.title = element_text(face = "bold")) +
+  coord_fixed()
+```
+
+```{r}
+ypll <- read_csv('data/ypll.csv')
+select_ypll <- dplyr::select(ypll, 7:17)
+```
+
+```{r}
+ypll_cormat <- round(cor(select_ypll), 2)
+head(ypll_cormat)
+```
+
+```{r}
+melted_ypll_cormat <- reshape2::melt(ypll_cormat)
+head(melted_ypll_cormat)
+```
+```{r}
+ypll_cor_mat_map <- ggplot(data = melted_ypll_cormat, aes(x = Var1, y = Var2, fill = value)) + 
+  geom_tile() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1))
+```
+
+```{r}
+lower_tri_func <- function(ypll_cormat) {
+  ypll_cormat[upper.tri(ypll_cormat)] <- NA
+  return(ypll_cormat)
+}
+
+upper_tri <- function(ypll_cormat) {
+  ypll_cormat[lower.tri(ypll_cormat)] <- NA
+  return(ypll_cormat)
+}
+```
+
+```{r}
+upper_tri_ypll_cor <- upper_tri(ypll_cormat)
+upper_tri_ypll_cor
+```
+
+```{r}
+melted_3 <- reshape2::melt(upper_tri_ypll_cor, na.rm = TRUE)
+```
+
+```{r}
+heat_map_2 <- ggplot(data = melted_3, aes(x = Var2, y = Var1, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white",
+                      midpoint = 0, limit = c(-1, 1), space = "Lab", name = "Correlation") +
+  ggtitle("Correlation between Chronic Diseases and Years of Potential Life Lost (per 100,000)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1),
+        plot.title = element_text(face = "bold")) +
+  coord_fixed()
+```
+
+```{r}
+citation("tidyverse")
+citation("dplyr")
+citation("vdemdata")
+citation("ggplot2")
+citation('plotly')
+citation('data.table')
+citation('reshape2')
+citation('patchwork')
+citation('raster')
+citation('maps')
+citation('sf')
+citation("conflicted")
+citation("readxl")
+```
+
+
+
+
