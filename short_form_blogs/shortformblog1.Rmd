@@ -1,0 +1,268 @@
+---
+title: "ShortFormBlog1"
+author: "Cathy Kim"
+date: '2022-10-20'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#install.packages("knitr")
+#library(knitr)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, eval = T, echo = F, results = 'hide'}
+#install.packages(c("ggplot2","tidyverse","patchwork","janitor","readxl","dplyr"))
+#install.packages("withr")
+#install.packages("corrplot")
+library(corrplot)
+library(withr)
+library(ggplot2)
+library(tidyverse)
+library(patchwork)
+library(rworldmap)
+library(janitor)
+library(readxl)
+library(dplyr)
+```
+
+```{r, eval = T, echo = F, results = 'hide'}
+# read in data
+data <- read_excel('data/maternal_mortality.xlsx', skip = 2)
+data_csv <- read_csv('data/maternalmortality.csv')
+head(data)
+```
+```{r}
+# filtering the data
+filtered_data <- filter(data, Indicator == "Maternal mortality ratio (per 100 000 live births)", Period == "2017")
+
+filtered_data_csv <- filter(data_csv, Indicator == "Maternal mortality ratio (per 100 000 live births)", Period == "2017")
+```
+
+```{r}
+filtered_mmd_2 <- filtered_data %>%
+  select(Location,
+         value = FactValueForMeasure,
+         Period)
+```
+
+
+
+```{r}
+filtered_data_csv %>%
+  select(Location, Value)
+
+map.world <- map_data("world")
+  
+```
+
+```{r}
+head(map.world)
+```
+
+```{r}
+filtered_map <- filtered_data_csv %>%
+  select(Location, Value) %>%
+  rename(region = Location, maternal_mortality = Value)
+
+```
+
+```{r}
+world_map <- map_data("world")
+mm_map <- left_join(filtered_map, world_map, by = "region")
+```
+
+```{r}
+map_theme <- theme(
+  axis.text = element_blank(),
+  axis.line = element_blank(),
+  axis.ticks = element_blank(),
+  panel.border = element_blank(),
+  panel.grid = element_blank(),
+  axis.title = element_blank(),
+  panel.background = element_rect(fill = "white"),
+  plot.title = element_text(hjust=0.5),
+  legend.position="bottom",
+)
+
+new_map <- ggplot(data = mm_map, mapping = aes(long, lat, group = group)) +
+  geom_polygon(aes(fill = as.numeric(maternal_mortality))) +
+  scale_fill_distiller(palette = "RdYlBu", direction = -1) +
+  ggtitle("Maternal Mortality Rate (per 100,000 live births) in 2017") +
+  labs(caption = "*United States data was not available", fill = "Maternal Mortality Rate") +
+  map_theme
+```
+
+```{r}
+ggsave("world_map.png")
+```
+
+
+# Second visuaization - line plot of mortality rates in the United States over the years
+```{r}
+data_second_vis <- filter(data_csv, Indicator == "Maternal mortality ratio (per 100 000 live births)", Location == "United States of America")
+
+```
+
+```{r}
+new_scatter <- ggplot(data_second_vis, aes(x=Period,y=as.numeric(Value), shape = Location)) + 
+  geom_point(color = "#56B4E9", size = 2.5) + 
+  scale_x_continuous(n.breaks = 12) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 20)) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 12),
+    legend.position = "none") +
+  ggtitle("Maternal Mortality in the United States from 2000 to 2017") +
+  xlab("Year") + ylab("Maternal Mortality (per 100,000 deaths)")
+    
+```
+
+```{r}
+ggsave("mm_us.png")
+```
+
+
+```{r}
+data_second_vis2 <- filter(data_csv, Indicator == "Maternal mortality ratio (per 100 000 live births)")
+
+second_vis <- dplyr::filter(data_second_vis2, Location %in% c('United States of America','Republic of Korea','Germany'))
+
+ggplot(second_vis, aes(x=Period, y=as.numeric(Value), color=Location)) + 
+  geom_point(size = 2.5) + 
+  scale_x_continuous(n.breaks = 12) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 20)) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 12)) +
+  ggtitle("Maternal Mortality (per 100,000 deaths) from 2000 to 2017") +
+  xlab("Year") + ylab("Maternal Mortality") +
+  scale_color_manual(values = c("#848184", "#D81A29", "#56B4E9"))
+```
+
+# Third Visualization -- correlation with WASH in 2016
+```{r}
+# read in data
+wash_csv <- read_csv('data/WASH_data.csv')
+```
+
+```{r}
+filtered_by_female <- filter(wash_csv, Dim1 == "Female")
+
+selected_wash_csv <- filtered_by_female %>%
+  select(Location, FactValueNumeric) %>%
+  rename(Wash_value = FactValueNumeric)
+
+```
+
+```{r}
+data_csv_2016 <- filter(data_csv, Indicator == "Maternal mortality ratio (per 100 000 live births)", Period == "2016")
+```
+
+
+```{r}
+wash_combined <- merge(selected_wash_csv, data_csv_2016, by = "Location")
+```
+
+```{r}
+wash_combined_selected <- wash_combined %>%
+  select(Location, Wash_value, Value)
+```
+
+```{r}
+combined_cor <- wash_combined_selected %>%
+  select(Wash_value, Value) %>%
+  rename(wash_mortality = Wash_value, maternal_mortality = Value)
+
+combined_cor$wash_mortality <- combined_cor$wash_mortality <- as.numeric(as.character(combined_cor$wash_mortality))
+combined_cor$maternal_mortality <- as.numeric(as.character(combined_cor$maternal_mortality))
+data_cor <- cor(combined_cor)
+data_cor
+```
+
+```{r}
+corrplot(data_cor)
+```
+
+```{r}
+wash_and_mm <- dplyr::filter(wash_combined_selected, Location %in% c('United States of America','Republic of Korea','Germany'))
+
+ggplot(wash_combined_selected, aes(x=as.numeric(Value), y=as.numeric(Wash_value))) + 
+  geom_point(size = 2.5, color = "#085735") + 
+  scale_y_continuous(limits = c(0,100)) +
+  scale_x_continuous(limits = c(0,1200)) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 10)) +
+  ggtitle("Correlation between Maternal Mortality and Unsafe Water, Sanitation, and Hygiene Mortality") +
+  xlab("Maternal Mortality Rate (per 100,000 deaths)") + ylab("Unsafe WASH mortality (per 100,000 deaths)") 
+```
+
+```{r}
+#install.packages("corrplot")
+citation("corrplot")
+citation("withr")
+citation("ggplot2")
+citation("tidyverse")
+citation("patchwork")
+citation("rworldmap")
+citation("janitor")
+citation("readxl")
+citation("dplyr")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#---------------------------------------------------------------------------------------------------------
+
+```{r}
+# join data with the map
+joinData <- joinCountryData2Map(filtered_data_csv, joinCode = "NAME", nameJoinColumn = "Location")
+
+```
+
+```{r}
+world <- map_data("world")
+df.country <- join(world, filtered_data_csv, by = "region")
+ggplot(joinData)
+```
+
+
+```{r}
+# Plot
+
+theMap <- mapCountryData(joinData, nameColumnToPlot="Value", addLegend = TRUE)
+do.call(addMapLegend, c(theMap, legendwidth = 1, legendMar = 2))
+```
+
+How the maternal mortality rate has changed since 2000
+
+```{r}
+filtered_data_vis2 <- filter(data, Indicator == "Maternal mortality ratio (per 100 000 live births)")
+```
+
+
+```{r}
+filtered_mmd_2 %>%
+  group_by(Location) %>%
+  summarize(mean_value = mean(as.numeric(filtered_mmd_2$value),
+                              na.rm = T)) -> new_summary_mmd
+```
+
