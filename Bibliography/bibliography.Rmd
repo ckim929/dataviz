@@ -1,0 +1,23 @@
+---
+title: "References"
+author: "Cathy Kim"
+date: "2022-11-15"
+output: html_document
+bibliography: packages.bib
+nocite: '@*'
+---
+
+```{r setup, include=FALSE}
+#install.packages(c("knitr", "rcrossref"))
+library(knitr)
+library(rcrossref)
+
+knitr::write_bib(c("tidyverse", "dplyr", "vdemdata", "ggplot2", "plotly", "knitr",
+                   "data.table","reshape2","rworldmap","patchwork"), width = 60,
+                 file = "packages.bib")
+```
+
+This information comes from ["Creating A Bibliography with rcrossref"](https://www.pauloldham.net/creating-a-bibliography-with-rcrossref/) by Paul Oldham, where there are a bunch of other tutorials useful for citations with and for R! 
+
+
+# References 
